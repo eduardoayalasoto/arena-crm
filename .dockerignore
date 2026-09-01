@@ -1,0 +1,12 @@
+# NOTA: .git se conserva a propósito -- "bench get-app" (ver Dockerfile)
+# clona la app localmente vía git, y necesita el repo completo para hacerlo.
+
+node_modules
+frontend/node_modules
+frontend/dist
+frappe-ui/node_modules
+**/__pycache__
+*.pyc
+.pytest_cache
+.ruff_cache
+e2e/node_modules
