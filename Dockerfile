@@ -21,13 +21,31 @@ WORKDIR /home/frappe
 # que "bench get-app" lo registre igual que haría con un git remoto.
 COPY --chown=frappe:frappe . /home/frappe/crm-src
 
-RUN bench init \
+# Los pasos de abajo clonan varios repos git (frappe, sus dependencias con
+# pin a commit exacto como gunicorn, etc.) -- el builder remoto a veces
+# corta esas conexiones a media negociación (fallo transitorio de red, no
+# de las dependencias en sí), así que cada uno se reintenta unas veces
+# antes de dar el build por fallido.
+RUN retry() { \
+        n=1; \
+        until "$@"; do \
+            n=$((n + 1)); \
+            if [ "$n" -gt 4 ]; then \
+                echo "Fallaron 4 intentos de: $*" >&2; \
+                return 1; \
+            fi; \
+            echo "Intento fallido, reintentando ($n/4) en 15s: $*" >&2; \
+            sleep 15; \
+        done; \
+    }; \
+    retry bench init \
+        --ignore-exist \
         --skip-redis-config-generation \
         --frappe-branch develop \
         frappe-bench \
     && cd frappe-bench \
-    && bench get-app crm /home/frappe/crm-src \
-    && bench setup requirements --python --node \
+    && retry sh -c 'rm -rf apps/crm && bench get-app crm /home/frappe/crm-src' \
+    && retry bench setup requirements --python --node \
     && bench build --app crm \
     # Redis y el auto-rebuild de assets ("watch") los maneja Railway/no aplican
     # en producción -- se quitan del Procfile igual que en docker/init.sh.
