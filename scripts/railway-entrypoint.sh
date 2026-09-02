@@ -30,6 +30,19 @@ cd /home/frappe/frappe-bench
 mkdir -p sites
 sudo chown -R frappe:frappe sites 2>/dev/null || true
 
+# El Volume se monta directo sobre sites/, así que además de los datos
+# del sitio (lo que sí queremos persistir) tapa archivos de bench a
+# nivel global horneados en el build: apps.txt (sin él, cualquier
+# comando de bench truena con "OSError: apps.txt Not Found" antes de
+# llegar siquiera a leer variables de entorno) y assets/ (CSS/JS
+# compilado). Se restauran desde la copia que el Dockerfile guardó
+# aparte -- sin tocar sites/<nombre_del_sitio>, que si ya existe es
+# justo lo que el Volume debe conservar entre despliegues.
+echo "==> Restaurando apps.txt y assets/ (el Volume los tapa al montarse sobre sites/)"
+cp -a /home/frappe/sites-template/apps.txt sites/apps.txt
+rm -rf sites/assets
+cp -a /home/frappe/sites-template/assets sites/assets
+
 : "${DB_HOST:?Falta la variable de entorno DB_HOST (host de MariaDB)}"
 : "${DB_PORT:=3306}"
 : "${DB_ROOT_PASSWORD:?Falta la variable de entorno DB_ROOT_PASSWORD}"

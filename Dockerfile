@@ -52,6 +52,16 @@
 #    "\n" inicial del printf garantiza una línea nueva pase lo que pase
 #    (una línea en blanco de más al inicio no afecta -- frappe.utils.
 #    get_file_items la ignora).
+#
+# 6) El Volume de Railway para persistir el sitio se monta directo sobre
+#    "sites/" -- pero esa carpeta no solo tiene datos del sitio
+#    (sites/<nombre>/), también archivos de bench a nivel global que se
+#    generan en el build (apps.txt, sites/assets/ con el CSS/JS
+#    compilado). Al montarse, el Volume reemplaza TODO el contenido de
+#    sites/ por el suyo (vacío la primera vez), tapando esos archivos
+#    horneados en la imagen -- por eso se guarda una copia aparte
+#    (sites-template/) que railway-entrypoint.sh restaura en cada
+#    arranque, sin tocar la carpeta del sitio en sí.
 
 FROM frappe/bench:latest
 
@@ -109,6 +119,8 @@ RUN retry() { \
     && retry env/bin/python -m pip install --quiet -e apps/crm \
     && retry sh -c 'cd apps/crm/frontend && yarn install --check-files' \
     && bench build --app crm \
+    && mkdir -p /home/frappe/sites-template \
+    && cp -a sites/. /home/frappe/sites-template/ \
     && sed -i '/redis/d' ./Procfile \
     && sed -i '/watch/d' ./Procfile
 
