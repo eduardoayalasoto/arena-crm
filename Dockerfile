@@ -19,7 +19,7 @@ WORKDIR /home/frappe
 
 # Código de este repo == la app "crm". Se copia aparte de frappe-bench para
 # que "bench get-app" lo registre igual que haría con un git remoto.
-COPY --chown=frappe:frappe . /home/frappe/crm-src
+COPY --chown=frappe:frappe . /home/frappe/crm
 
 # Git no debe intentar pedir credenciales interactivamente -- si una
 # conexión falla a media negociación (ver más abajo), que git falle
@@ -73,12 +73,12 @@ RUN retry() { \
     && cd /home/frappe \
     && retry sh -c 'rm -rf frappe-bench && bench init --skip-redis-config-generation --frappe-path /home/frappe/frappe-src --frappe-branch develop frappe-bench' \
     && cd frappe-bench \
-    && retry sh -c 'rm -rf apps/crm && bench get-app crm /home/frappe/crm-src' \
+    && retry sh -c 'rm -rf apps/crm && bench get-app /home/frappe/crm' \
     && retry bench setup requirements --python --node \
     && bench build --app crm \
     && sed -i '/redis/d' ./Procfile \
     && sed -i '/watch/d' ./Procfile \
-    && rm -rf /home/frappe/crm-src /home/frappe/frappe-src
+    && rm -rf /home/frappe/crm /home/frappe/frappe-src
 
 WORKDIR /home/frappe/frappe-bench
 
