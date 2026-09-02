@@ -39,6 +39,10 @@ ENV GIT_TERMINAL_PROMPT=0
 # pyproject.toml de frappe pinea un par de dependencias (gunicorn, PyPika)
 # a un commit exacto vía "git+https://..." -- mismo protocolo bloqueado,
 # así que el sed de abajo las reescribe a la URL de tarball de ese commit.
+# package.json trae una más (air-datepicker, sin commit fijo -- se
+# reescribe a la rama "master" de ese repo, su default branch) porque
+# "bench init" ya dispara "yarn install" de frappe internamente, antes de
+# que este Dockerfile llegue a instalar nada del lado Node por su cuenta.
 #
 # Nota sobre comentarios: Docker aplana todas las líneas continuadas con
 # "\" de un RUN en una sola línea antes de pasarla al shell -- un "#" en
@@ -61,6 +65,7 @@ RUN retry() { \
     retry sh -c 'rm -rf /home/frappe/frappe-src && mkdir -p /home/frappe/frappe-src && curl -fsSL https://github.com/frappe/frappe/archive/refs/heads/develop.tar.gz | tar xz -C /home/frappe/frappe-src --strip-components=1' \
     && cd /home/frappe/frappe-src \
     && sed -i -E 's#git\+https://github\.com/([^@[:space:]]+)@([0-9a-f]+)#https://github.com/\1/archive/\2.tar.gz#g' pyproject.toml \
+    && sed -i -E 's#git\+https://github\.com/frappe/air-datepicker#https://github.com/frappe/air-datepicker/archive/refs/heads/master.tar.gz#' package.json \
     && git init -q \
     && git add -A \
     && git -c user.email=build@localhost -c user.name=build commit -q -m "vendored from frappe/frappe develop" \
