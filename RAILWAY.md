@@ -12,7 +12,10 @@ Frappe requiere **MariaDB**, no el addon nativo "MySQL" de Railway (no hay
 garantía de compatibilidad total con MySQL puro). Crear un servicio nuevo:
 
 - **New → Docker Image** → `mariadb:10.8`
-- Variable: `MYSQL_ROOT_PASSWORD` = (elige una contraseña)
+- Variable: `MARIADB_ROOT_PASSWORD` = (elige una contraseña) -- esta versión de
+  la imagen oficial ya no acepta `MYSQL_ROOT_PASSWORD`, exige el nombre
+  `MARIADB_*` (confirmado por el propio entrypoint de la imagen al fallar
+  sin él)
 - Agregar un **Volume** montado en `/var/lib/mysql` (si no, se pierde la
   base de datos en cada redeploy)
 
@@ -32,7 +35,7 @@ garantía de compatibilidad total con MySQL puro). Crear un servicio nuevo:
 | Variable            | Valor                                                         |
 |----------------------|---------------------------------------------------------------|
 | `DB_HOST`            | `${{MariaDB.RAILWAY_PRIVATE_DOMAIN}}` (nombre del servicio MariaDB) |
-| `DB_ROOT_PASSWORD`   | `${{MariaDB.MYSQL_ROOT_PASSWORD}}`                             |
+| `DB_ROOT_PASSWORD`   | `${{MariaDB.MARIADB_ROOT_PASSWORD}}`                           |
 | `REDIS_CACHE_URL`    | `${{Redis.REDIS_URL}}`                                         |
 | `REDIS_QUEUE_URL`    | `${{Redis.REDIS_URL}}`                                         |
 | `ADMIN_PASSWORD`     | contraseña del usuario Administrator del sitio                |
