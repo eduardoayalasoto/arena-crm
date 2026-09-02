@@ -42,6 +42,16 @@
 #    "#" en medio de esa cadena "traga" como comentario todo lo que sigue
 #    en el resto de la línea (incluidos los "&&" restantes), así que
 #    ningún comentario va intercalado en los bloques RUN de abajo.
+#
+# 5) sites/apps.txt (registro de apps a nivel bench) se actualiza con
+#    "printf '\ncrm\n' >>", no "echo crm >>": bench init deja ese archivo
+#    sin salto de línea final, así que un simple "echo crm >>" concatena
+#    directo al final de la línea existente ("frappe" + "crm" =
+#    "frappecrm", una sola línea) en vez de agregar una línea nueva --
+#    Frappe entonces busca un módulo Python "frappecrm" que no existe. El
+#    "\n" inicial del printf garantiza una línea nueva pase lo que pase
+#    (una línea en blanco de más al inicio no afecta -- frappe.utils.
+#    get_file_items la ignora).
 
 FROM frappe/bench:latest
 
@@ -95,7 +105,7 @@ RUN retry() { \
             sleep "$wait_s"; \
         done; \
     }; \
-    echo "crm" >> sites/apps.txt \
+    printf '\ncrm\n' >> sites/apps.txt \
     && retry env/bin/python -m pip install --quiet -e apps/crm \
     && retry sh -c 'cd apps/crm/frontend && yarn install --check-files' \
     && bench build --app crm \
