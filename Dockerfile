@@ -21,6 +21,16 @@ WORKDIR /home/frappe
 # que "bench get-app" lo registre igual que haría con un git remoto.
 COPY --chown=frappe:frappe . /home/frappe/crm
 
+# "bench get-app" intenta leer metadata (org/repo) del PRIMER remoto git
+# configurado en el repo copiado (origin -> github.com/<tu-fork>) en vez
+# de derivarla del path local -- y en este entorno eso revienta con
+# "AttributeError: 'App' object has no attribute 'org'" dentro del propio
+# bench (confirmado leyendo bench/app.py: AppMeta._setup_details_from_mounted_disk
+# solo maneja bien el caso SIN remotos, cayendo a IndexError -> deriva
+# org/repo del nombre de carpeta). Quitar los remotos del repo copiado
+# antes de que bench lo toque fuerza ese camino, ya bien manejado.
+RUN for r in $(git -C /home/frappe/crm remote); do git -C /home/frappe/crm remote remove "$r"; done
+
 # Git no debe intentar pedir credenciales interactivamente -- si una
 # conexión falla a media negociación (ver más abajo), que git falle
 # rápido y limpio en vez de bloquearse esperando un prompt que nunca
