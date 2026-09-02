@@ -28,14 +28,14 @@ COPY --chown=frappe:frappe . /home/frappe/crm-src
 ENV GIT_TERMINAL_PROMPT=0
 
 # Los pasos de abajo clonan varios repos git (frappe, sus dependencias con
-# pin a commit exacto como gunicorn, etc.) -- el builder remoto a veces
-# corta esas conexiones a media negociación (fallo transitorio de red, no
-# de las dependencias en sí), así que cada uno se reintenta unas veces
-# antes de dar el build por fallido. Cada intento arranca de cero (rm -rf
-# antes de reintentar): un intento fallido deja el directorio a medias, y
-# reusarlo (p.ej. "bench init --ignore-exist" sobre un Procfile ya creado)
-# dispara un prompt interactivo de bench que aborta solo en un build sin
-# terminal.
+# pin a commit exacto como gunicorn, etc.) -- el builder remoto de Railway
+# choca seguido con el rate-limit anónimo de GitHub para git smart-http
+# (probablemente por compartir salida de red con muchos otros builds), así
+# que cada paso que depende de red se reintenta con backoff creciente.
+# Cada intento arranca de cero (rm -rf antes de reintentar): un intento
+# fallido deja el directorio a medias, y reusarlo (p.ej. "bench init
+# --ignore-exist" sobre un Procfile ya creado) dispara un prompt
+# interactivo de bench que aborta solo en un build sin terminal.
 RUN retry() { \
         n=1; \
         until "$@"; do \
@@ -44,11 +44,18 @@ RUN retry() { \
                 echo "Fallaron 6 intentos de: $*" >&2; \
                 return 1; \
             fi; \
-            echo "Intento fallido, reintentando ($n/6) en 15s: $*" >&2; \
-            sleep 15; \
+            wait_s=$((n * 20)); \
+            echo "Intento fallido, reintentando ($n/6) en ${wait_s}s: $*" >&2; \
+            sleep "$wait_s"; \
         done; \
     }; \
-    retry sh -c 'rm -rf frappe-bench && bench init --skip-redis-config-generation --frappe-branch develop frappe-bench' \
+    # Frappe se clona una sola vez a una ruta local: "bench init" valida la
+    # rama con "git ls-remote" contra el path que le demos, así que
+    # pasándole un checkout ya local (--frappe-path) evita que vuelva a
+    # pegarle a GitHub por red -- solo el clone de abajo lo hace, y ese sí
+    # está cubierto por el retry.
+    retry sh -c 'rm -rf /home/frappe/frappe-src && git clone --depth 1 --branch develop https://github.com/frappe/frappe.git /home/frappe/frappe-src' \
+    && retry sh -c 'rm -rf frappe-bench && bench init --skip-redis-config-generation --frappe-path /home/frappe/frappe-src --frappe-branch develop frappe-bench' \
     && cd frappe-bench \
     && retry sh -c 'rm -rf apps/crm && bench get-app crm /home/frappe/crm-src' \
     && retry bench setup requirements --python --node \
@@ -57,7 +64,7 @@ RUN retry() { \
     # en producción -- se quitan del Procfile igual que en docker/init.sh.
     && sed -i '/redis/d' ./Procfile \
     && sed -i '/watch/d' ./Procfile \
-    && rm -rf /home/frappe/crm-src
+    && rm -rf /home/frappe/crm-src /home/frappe/frappe-src
 
 WORKDIR /home/frappe/frappe-bench
 
