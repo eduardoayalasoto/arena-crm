@@ -27,15 +27,24 @@ COPY --chown=frappe:frappe . /home/frappe/crm-src
 # llegará (no hay terminal en el build).
 ENV GIT_TERMINAL_PROMPT=0
 
-# Los pasos de abajo clonan varios repos git (frappe, sus dependencias con
-# pin a commit exacto como gunicorn, etc.) -- el builder remoto de Railway
-# choca seguido con el rate-limit anónimo de GitHub para git smart-http
-# (probablemente por compartir salida de red con muchos otros builds), así
-# que cada paso que depende de red se reintenta con backoff creciente.
-# Cada intento arranca de cero (rm -rf antes de reintentar): un intento
-# fallido deja el directorio a medias, y reusarlo (p.ej. "bench init
-# --ignore-exist" sobre un Procfile ya creado) dispara un prompt
-# interactivo de bench que aborta solo en un build sin terminal.
+# El builder de Railway rechaza sistemáticamente el protocolo git
+# smart-http hacia github.com (12/12 intentos fallidos incluso con minutos
+# de espera entre reintentos -- no es rate-limit transitorio, es un
+# bloqueo/interferencia consistente), mientras que HTTPS normal sí
+# funciona (la imagen base de abajo se descarga bien). Por eso frappe se
+# obtiene como tarball por HTTPS en vez de "git clone", y se convierte en
+# un repo git local mínimo (bench get-app / bench init lo clonan después
+# desde ahí, ya sin red).
+#
+# pyproject.toml de frappe pinea un par de dependencias (gunicorn, PyPika)
+# a un commit exacto vía "git+https://..." -- mismo protocolo bloqueado,
+# así que el sed de abajo las reescribe a la URL de tarball de ese commit.
+#
+# Nota sobre comentarios: Docker aplana todas las líneas continuadas con
+# "\" de un RUN en una sola línea antes de pasarla al shell -- un "#" en
+# medio de esa cadena "traga" como comentario todo lo que sigue en el
+# resto de la línea (incluidos los "&&" restantes), así que ningún
+# comentario va intercalado en el bloque de abajo; van todos aquí arriba.
 RUN retry() { \
         n=1; \
         until "$@"; do \
@@ -44,24 +53,24 @@ RUN retry() { \
                 echo "Fallaron 6 intentos de: $*" >&2; \
                 return 1; \
             fi; \
-            wait_s=$((n * 20)); \
+            wait_s=$((n * 15)); \
             echo "Intento fallido, reintentando ($n/6) en ${wait_s}s: $*" >&2; \
             sleep "$wait_s"; \
         done; \
     }; \
-    # Frappe se clona una sola vez a una ruta local: "bench init" valida la
-    # rama con "git ls-remote" contra el path que le demos, así que
-    # pasándole un checkout ya local (--frappe-path) evita que vuelva a
-    # pegarle a GitHub por red -- solo el clone de abajo lo hace, y ese sí
-    # está cubierto por el retry.
-    retry sh -c 'rm -rf /home/frappe/frappe-src && git clone --depth 1 --branch develop https://github.com/frappe/frappe.git /home/frappe/frappe-src' \
+    retry sh -c 'rm -rf /home/frappe/frappe-src && mkdir -p /home/frappe/frappe-src && curl -fsSL https://github.com/frappe/frappe/archive/refs/heads/develop.tar.gz | tar xz -C /home/frappe/frappe-src --strip-components=1' \
+    && cd /home/frappe/frappe-src \
+    && sed -i -E 's#git\+https://github\.com/([^@[:space:]]+)@([0-9a-f]+)#https://github.com/\1/archive/\2.tar.gz#g' pyproject.toml \
+    && git init -q \
+    && git add -A \
+    && git -c user.email=build@localhost -c user.name=build commit -q -m "vendored from frappe/frappe develop" \
+    && git branch -m develop \
+    && cd /home/frappe \
     && retry sh -c 'rm -rf frappe-bench && bench init --skip-redis-config-generation --frappe-path /home/frappe/frappe-src --frappe-branch develop frappe-bench' \
     && cd frappe-bench \
     && retry sh -c 'rm -rf apps/crm && bench get-app crm /home/frappe/crm-src' \
     && retry bench setup requirements --python --node \
     && bench build --app crm \
-    # Redis y el auto-rebuild de assets ("watch") los maneja Railway/no aplican
-    # en producción -- se quitan del Procfile igual que en docker/init.sh.
     && sed -i '/redis/d' ./Procfile \
     && sed -i '/watch/d' ./Procfile \
     && rm -rf /home/frappe/crm-src /home/frappe/frappe-src
