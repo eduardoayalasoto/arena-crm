@@ -21,28 +21,34 @@ WORKDIR /home/frappe
 # que "bench get-app" lo registre igual que haría con un git remoto.
 COPY --chown=frappe:frappe . /home/frappe/crm-src
 
+# Git no debe intentar pedir credenciales interactivamente -- si una
+# conexión falla a media negociación (ver más abajo), que git falle
+# rápido y limpio en vez de bloquearse esperando un prompt que nunca
+# llegará (no hay terminal en el build).
+ENV GIT_TERMINAL_PROMPT=0
+
 # Los pasos de abajo clonan varios repos git (frappe, sus dependencias con
 # pin a commit exacto como gunicorn, etc.) -- el builder remoto a veces
 # corta esas conexiones a media negociación (fallo transitorio de red, no
 # de las dependencias en sí), así que cada uno se reintenta unas veces
-# antes de dar el build por fallido.
+# antes de dar el build por fallido. Cada intento arranca de cero (rm -rf
+# antes de reintentar): un intento fallido deja el directorio a medias, y
+# reusarlo (p.ej. "bench init --ignore-exist" sobre un Procfile ya creado)
+# dispara un prompt interactivo de bench que aborta solo en un build sin
+# terminal.
 RUN retry() { \
         n=1; \
         until "$@"; do \
             n=$((n + 1)); \
-            if [ "$n" -gt 4 ]; then \
-                echo "Fallaron 4 intentos de: $*" >&2; \
+            if [ "$n" -gt 6 ]; then \
+                echo "Fallaron 6 intentos de: $*" >&2; \
                 return 1; \
             fi; \
-            echo "Intento fallido, reintentando ($n/4) en 15s: $*" >&2; \
+            echo "Intento fallido, reintentando ($n/6) en 15s: $*" >&2; \
             sleep 15; \
         done; \
     }; \
-    retry bench init \
-        --ignore-exist \
-        --skip-redis-config-generation \
-        --frappe-branch develop \
-        frappe-bench \
+    retry sh -c 'rm -rf frappe-bench && bench init --skip-redis-config-generation --frappe-branch develop frappe-bench' \
     && cd frappe-bench \
     && retry sh -c 'rm -rf apps/crm && bench get-app crm /home/frappe/crm-src' \
     && retry bench setup requirements --python --node \
