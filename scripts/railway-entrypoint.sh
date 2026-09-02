@@ -21,6 +21,15 @@ set -euo pipefail
 
 cd /home/frappe/frappe-bench
 
+# Un Volume nuevo de Railway se monta con dueño root y permisos
+# restrictivos; el contenedor corre como el usuario sin privilegios
+# "frappe" (fijado en el Dockerfile), así que no puede escribir en
+# sites/ (common_site_config.json, la base del sitio, etc.) hasta que
+# se corrija el dueño. frappe/bench:latest le da a "frappe" sudo sin
+# contraseña para justo este tipo de ajustes de desarrollo.
+mkdir -p sites
+sudo chown -R frappe:frappe sites 2>/dev/null || true
+
 : "${DB_HOST:?Falta la variable de entorno DB_HOST (host de MariaDB)}"
 : "${DB_PORT:=3306}"
 : "${DB_ROOT_PASSWORD:?Falta la variable de entorno DB_ROOT_PASSWORD}"
