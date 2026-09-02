@@ -62,6 +62,15 @@
 #    horneados en la imagen -- por eso se guarda una copia aparte
 #    (sites-template/) que railway-entrypoint.sh restaura en cada
 #    arranque, sin tocar la carpeta del sitio en sí.
+#
+# 7) El Procfile de bench trae "web: bench serve --port 8000" tal cual --
+#    y "bench serve" sin la bandera "--proxy" hace bind a 127.0.0.1, no a
+#    0.0.0.0 (así lo decide frappe/app.py: solo usa 0.0.0.0 si detecta un
+#    proxy delante). Railway hace proxy desde FUERA del contenedor, así
+#    que un proceso escuchando solo en loopback es inalcanzable -- eso
+#    daba el 502 aunque todo el arranque se viera exitoso en los logs.
+#    Se le agrega "--proxy" a esa línea del Procfile para forzar el bind
+#    a 0.0.0.0.
 
 FROM frappe/bench:latest
 
@@ -122,7 +131,8 @@ RUN retry() { \
     && mkdir -p /home/frappe/sites-template \
     && cp -a sites/. /home/frappe/sites-template/ \
     && sed -i '/redis/d' ./Procfile \
-    && sed -i '/watch/d' ./Procfile
+    && sed -i '/watch/d' ./Procfile \
+    && sed -i '/^web:/ s/$/ --proxy/' ./Procfile
 
 COPY --chown=frappe:frappe scripts/railway-entrypoint.sh ./railway-entrypoint.sh
 RUN chmod +x ./railway-entrypoint.sh
