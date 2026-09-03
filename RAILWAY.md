@@ -29,6 +29,14 @@ garantía de compatibilidad total con MySQL puro). Crear un servicio nuevo:
   (persiste el sitio entre despliegues -- sin esto, cada redeploy recrea
   el sitio desde cero)
 - Generar un dominio público (Settings → Networking → Generate Domain)
+  -- **verificar que el "target port" quede en 8000** (el puerto real en
+  el que escucha `bench serve`, fijado en `EXPOSE 8000` del Dockerfile y
+  en el `Procfile`). Railway a veces asigna 8080 por default al generar
+  el dominio antes de que exista el Dockerfile; si no coincide con 8000
+  da 502 aunque el contenedor esté sano (`x-railway-fallback: true` en
+  los headers de la respuesta es la pista). Se corrige en Settings →
+  Networking, editando el puerto junto al dominio, o por CLI:
+  `railway domain update <dominio> --port 8000`.
 
 ## 2. Variables de entorno del servicio "crm"
 
