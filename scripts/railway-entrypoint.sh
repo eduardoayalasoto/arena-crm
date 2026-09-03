@@ -43,6 +43,12 @@ cp -a /home/frappe/sites-template/apps.txt sites/apps.txt
 rm -rf sites/assets
 cp -a /home/frappe/sites-template/assets sites/assets
 
+# Diagnóstico temporal: confirmar en el log qué Procfile trae en verdad
+# esta imagen (para descartar que un despliegue esté sirviendo una capa
+# vieja sin el "--proxy" en la línea "web:").
+echo "==> Procfile de esta imagen:"
+cat Procfile
+
 : "${DB_HOST:?Falta la variable de entorno DB_HOST (host de MariaDB)}"
 : "${DB_PORT:=3306}"
 : "${DB_ROOT_PASSWORD:?Falta la variable de entorno DB_ROOT_PASSWORD}"
